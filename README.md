@@ -1,6 +1,1 @@
-
-
-<!---
-LOL Stat analyzer
-
---->
+This program is a crossword/block puzzle solver that generates and solves boards of arbitrary size. It reads board dimensions, total blocks, and a word dictionary, then places blocks and words while enforcing constraints like symmetry, horizontal/vertical spacing, and connectivity of open cells. The solver uses autofill heuristics to quickly place obvious blocks and words, and recursive backtracking to explore remaining possibilities when needed. The board can be printed in a readable 2D format, and all placements are validated against the dictionary to ensure legal solutions.
