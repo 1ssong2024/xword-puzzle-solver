@@ -15,7 +15,6 @@ POSTOLEN = ""
 SEENWRDS = {}
 alpha = "ABCDEFGHIJKLMNOP"
 NOTPOSS = set()
-STATS = {}
 #0  #1  #2  #3  #4  #5  #6  #7  #8
 #9  #10 #11 #12 #13 #14 #15 #16 #17
 #18 #19 #20 #21 #22 #23 #24 #25 #26
@@ -96,17 +95,40 @@ def calculatelen(brd): #cut time in half by mirroring lengths
          if hLen: posandlen[i] = [hLen, 0]
    return posandlen
    
-
-   
 def validword(board, ind, word, ori, check):
    global NOTPOSS
    if ori == "h":
       for i, letter in enumerate(check):
          if letter == BLOCKCHAR:
-            print('p')
             return False
          if letter not in "*"+OPENCHAR and letter != word[i]:
             return False
+      board = putword(board, ind, word, ori) #input the word if OK
+      vertpos = -1 #position of vert word
+      for i in range(ind, ind+len(word),): #start at ind, go to lastind
+         for vind in range(i, 0, -(WIDTH+2)): 
+            if board[vind] == BLOCKCHAR: 
+               vertpos = vind+WIDTH+2
+               break
+         vword = board[vertpos: vertpos + (2+WIDTH)*POSTOLEN[vertpos][1]: 2+WIDTH]
+         if OPENCHAR not in vword: #vertical len, does not make a full word
+            if not vword in DICTIONARY[POSTOLEN[vertpos][1]]: #checks to see if the vertical
+               #print(vword)
+               return False
+         else:
+            LOS = []
+            for ind, letter in enumerate(vword):
+               if letter == OPENCHAR:
+                  continue
+               tupkey = (len(vword), letter, ind)
+               if tupkey in NOTPOSS: return False
+               if not tupkey in LETTERDCT:
+                  return False
+               LOS.append(LETTERDCT[tupkey])
+            SOS = set.intersection(*LOS)
+            if not SOS: 
+               NOTPOSS.add(vword)
+               return False
  
    if ori == "v":
       check = board[ind: ind+len(word)*(WIDTH+2):WIDTH+2]
@@ -115,6 +137,32 @@ def validword(board, ind, word, ori, check):
             return False
          if letter not in "*"+OPENCHAR and letter != word[i]:
             return False
+      board = putword(board, ind, word, ori) #input the word if OK
+      horzpos = -1 #position of vert word
+      for i in range(ind, ind+len(word)*(WIDTH+2), WIDTH+2): #start at ind, go to lastind
+         for hind in range(i, 0, -1): 
+            if board[hind] == BLOCKCHAR: 
+               horzpos = hind+1
+               break
+         hword = board[horzpos: horzpos + POSTOLEN[horzpos][0]]
+         if OPENCHAR not in hword: #vertical len, does not make a full word
+            if hword not in DICTIONARY[POSTOLEN[horzpos][0]]: #checks to see if the vertical
+               return False
+         else:
+            LOS = []
+            for ind, letter in enumerate(hword):
+               if letter == OPENCHAR:
+                  continue
+               tupkey = (len(hword), letter, ind)
+               if tupkey in NOTPOSS:
+                  return False
+               if not tupkey in LETTERDCT:
+                  return False
+               LOS.append(LETTERDCT[tupkey])
+            SOS = set.intersection(*LOS)
+            if not SOS: 
+               NOTPOSS.add(hword)
+               return False
    return True      
 
 
@@ -131,13 +179,11 @@ def solve(board):
    POSTOLEN = calculatelen2(board)
    postolen = calculatelen(board) 
    toremove = {board:set()} #used words
-   RD(board, postolen)
    board = solvehelper(board, postolen, toremove)
    board = removeborder(board)
    return board
  
-def invalidplace(board, postolen, toremove):
-   global SEENWRDS
+def invalidplace(board, toremove, postolen):
    toremove[board] = set()
    for pos in POSTOLEN:
       hLen = POSTOLEN[pos][0]
@@ -147,81 +193,43 @@ def invalidplace(board, postolen, toremove):
       if hLen:
             hstr = board[pos: pos + POSTOLEN[pos][0]].lower()
             if not "-" in hstr:
-               if hstr in SEENWRDS:
-                  if not SEENWRDS[hstr]: return True
                if not hstr in DICTIONARY[POSTOLEN[pos][0]]: 
-                  SEENWRDS[hstr] = ""
                   return True
                if hstr in DICTIONARY[POSTOLEN[pos][0]]:
                   toremove[board].add(hstr)
+            if hLen and vLen: 
+               postolen[pos][0] = hlen(board, pos, 1) 
+               postolen[pos][1] = vlen(board, pos, 1)
+            elif not vLen: 
+               postolen[pos][0] = hlen(board, pos, 1) 
+               postolen[pos][1] = 0
       if vLen:
             vstr = board[pos: pos + POSTOLEN[pos][1]*(WIDTH+2): WIDTH+2].lower()
-            if not "-" in vstr:
-               if vstr in SEENWRDS:
-                  if not SEENWRDS[vstr]: return True
-               if not vstr in DICTIONARY[POSTOLEN[pos][1]]:
-                  SEENWRDS[vstr] = ""
-                  return True
+            if not "-" in vstr and not vstr in DICTIONARY[POSTOLEN[pos][1]]:
+               return True
             if vstr in DICTIONARY[POSTOLEN[pos][1]]:
                toremove[board].add(vstr)
+            if hLen and vLen: 
+               postolen[pos][0] = hlen(board, pos, 1) 
+               postolen[pos][1] = vlen(board, pos, 1)
+            elif not hLen: 
+               postolen[pos][0] = 0 
+               postolen[pos][1] = vlen(board, pos, 1)
    return False 
    
-def generatewrd(board, pos, wrdlen, ori, toremove):
-   wrd = ""
-   if ori == "h": 
-      for wrd in DICTIONARY[wrdlen]:
-         if validword(board, pos, wrd, "h", board[pos:pos+wrdlen]) and wrd not in toremove:
-            return wrd
-   if ori == "v": 
-      for wrd in DICTIONARY[wrdlen]:
-         if validword(board, pos, wrd, "v", board[pos:pos+wrdlen*(WIDTH+2):WIDTH+2]) and wrd not in toremove:
-            return wrd
-   return 11   
- 
-def updatestats(key):
-    if not key in STATS:
-        STATS[key] = 0
-    STATS[key] += 1   
-   
 def solvehelper(board, postolen, toremove):
-    global STATS
     if solved(board):
       return board
+    #postolen = calculatelen(board)
+#     print(postolen)
     dctChoices = possbrds(board, postolen, toremove)
-    #print(dctChoices)
     for brd in dctChoices: # brd: (tofill but certain ind is removed, toremoved + word)
       #display2Dw(brd, WIDTH+2)
-      updatestats("previous")
       bF = solvehelper(brd, postolen, toremove)
       if bF:
           return bF
     return ""
 
-def RD(board, tofill):
-   posandori = {}
-   print(tofill)
-   for pos in tofill:
-      vLen = tofill[pos][1]
-      ori = "v"
-      posandori[pos] = vLen
-   maxval = max(posandori.values())
-   maxkey = -1
-   for key in posandori:
-      if posandori[key] == maxval:
-         maxkey = key
-         break
-   wrd = generatewrd(board, maxkey, posandori[maxkey], "v", set())
-   toremove = {wrd}
-   board = putvertword(board, maxkey, wrd, WIDTH+2)
-   for pos in tofill:
-      hLen = tofill[pos][0]
-      if hLen:
-         for word in DICTIONARY[hLen]:
-            if word not in toremove:
-               if validword(board, pos, word, "h", board[pos:pos+tofill[pos][0]]):
-                  board = putword(board, pos, word, "h")
-                  break
-   display2D(removeborder(board))
 
 def possbrds(board, tofill, toremove):
    global SEENWRDS
@@ -230,51 +238,43 @@ def possbrds(board, tofill, toremove):
    for ind in tofill:
          hLen = hlen(board, ind, 1) if tofill[ind][0] else 0
          if hLen:
-            postochoices[str(ind)+"h"] = set()
             constr = board[ind: ind+hLen]
-            if constr in SEENWRDS: 
-               updatestats("seen already")
-               postochoices[str(ind)+"h"] = SEENWRDS[constr]
+            if constr in SEENWRDS:
+               postochoices[str(ind)+"h"] = len(SEENWRDS[constr])
             else:
-               updatestats("unseen")
                for word in DICTIONARY[hLen]:
-                        if validword(board, ind, word, "h", constr):
-                           postochoices[str(ind)+"h"].add(word)
-               SEENWRDS[constr] = postochoices[str(ind)+"h"]
+                  if word not in toremove[board]:
+                     if validword(board, ind, word, "h", constr):
+                        if not constr in SEENWRDS: SEENWRDS[constr] = {word}
+                        if constr in SEENWRDS: SEENWRDS[constr].add(word)
+                        if str(ind)+"h" in postochoices: postochoices[str(ind)+"h"] += 1
+                        if str(ind)+"h" not in postochoices: postochoices[str(ind)+"h"] = 1
          vLen = vlen(board, ind, 1) if tofill[ind][1] else 0
          if vLen:
-            postochoices[str(ind)+"v"] = set()
             constr = board[ind: ind+vLen*(WIDTH+2): WIDTH+2]
-            if constr in SEENWRDS: 
-               updatestats("seen already")
-               postochoices[str(ind)+"v"] = SEENWRDS[constr]
+            if constr in SEENWRDS:
+               postochoices[str(ind)+"v"] = len(SEENWRDS[constr])
             else:
-               updatestats("unseen")
                for word in DICTIONARY[vLen]:
-                        if validword(board, ind, word, "v", constr):
-                           postochoices[str(ind)+"v"].add(word)
-               SEENWRDS[constr] = postochoices[str(ind)+"v"]
+                  if word not in toremove[board]:
+                     if validword(board, ind, word, "v", constr):
+                        if not constr in SEENWRDS: SEENWRDS[constr] = {word}
+                        if constr in SEENWRDS: SEENWRDS[constr].add(word)
+                        if str(ind)+"v" in postochoices: postochoices[str(ind)+"v"] += 1
+                        if str(ind)+"v" not in postochoices: postochoices[str(ind)+"v"] = 1
    if not postochoices: return postochoices
-   #display2Dw(board, WIDTH+2)
-   #print([len(postochoices[pos]) for pos in postochoices])
-   else:
-      minposs = min(len(choice) for choice in postochoices.values())
-      if minposs == 0: 
-         updatestats("invalid")
-         return ""
-      poskey = -1
-      
-      for pos in postochoices:
-         if len(postochoices[pos]) == minposs:
-            poskey = pos
-            break
-      #tofill[int(poskey[:len(poskey)-1])][poskey[-1]=="v"] = 0
-      for word in postochoices[poskey]:
-         if word not in toremove[board]:
+   minposs = min(postochoices.values())
+   poskey = -1
+   for pos in postochoices:
+      if postochoices[pos] == minposs:
+         poskey = pos
+         break
+   for word in DICTIONARY[tofill[int(poskey[:len(poskey)-1])][poskey[-1]=="v"]]:
+      if word not in toremove[board]:
+         if validword(board, int(poskey[:len(poskey)-1]), word, poskey[-1], constr):
             newbrd = putword(board, int(poskey[:len(poskey)-1]), word, poskey[-1])
-            if not invalidplace(newbrd, tofill, toremove):
-               toremove[newbrd].add(word)
-               toreturn.add(newbrd)
+            toremove[newbrd] = {word}
+            toreturn.add(newbrd)
    return toreturn
 
 def removeborder(brd):
@@ -621,10 +621,9 @@ def main():
             brd = bruteForce(brd, numblocks-OGBLOCKS).replace("*", "-")
             display2D(brd)#print("New board: ")
         brd = brd.replace("*", "-")
-        display2D(brd)
+      #   display2D(brd)
         brd = solve(brd)
         display2D(brd)        
-        print(STATS)
         #print(startPzTime-time.process_time())
 
     else: 
